@@ -1,0 +1,7 @@
+wikipedia-api == 0.6.0
+python-telegram-bot == 20.4
+langchain == 0.0.240
+fuzzywuzzy == 0.18.0
+pymongo == 4.4.1
+python-Levenshtein == 0.21.1
+python-dotenv == 1.0.0
