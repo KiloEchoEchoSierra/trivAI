@@ -9,6 +9,7 @@ from langchain.llms import OpenAI
 from bs4 import BeautifulSoup
 from fuzzywuzzy import fuzz
 from pymongo import MongoClient
+from dotenv import load_dotenv
 
 
 logging.basicConfig(
@@ -156,6 +157,7 @@ async def echo(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 if __name__ == '__main__':
+    load_dotenv()
     last_result_dict = {}
 
     api_key = os.environ.get("OPENAI_API_KEY")
