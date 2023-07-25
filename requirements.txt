@@ -5,3 +5,5 @@ fuzzywuzzy == 0.18.0
 pymongo == 4.4.1
 python-Levenshtein == 0.21.1
 python-dotenv == 1.0.0
+beautifulsoup4 == 4.12.2
+openai == 0.27.8
