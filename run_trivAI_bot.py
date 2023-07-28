@@ -1,15 +1,14 @@
 import logging
 import os
-import requests
 import random
 import wikipediaapi
 from telegram import Update, KeyboardButton, ReplyKeyboardMarkup, constants
 from telegram.ext import filters, MessageHandler, ApplicationBuilder, CommandHandler, ContextTypes
 from langchain.llms import OpenAI
-from bs4 import BeautifulSoup
-from fuzzywuzzy import fuzz
 from pymongo import MongoClient
 from dotenv import load_dotenv
+
+from get_trivia import get_random_trivia, get_specific_trivia
 
 
 logging.basicConfig(
@@ -18,21 +17,13 @@ logging.basicConfig(
 )
 
 
-def get_random_doc_from_db():
-    res = db.trivia.aggregate([
-        {
-            "$sample": {
-            "size": 1
-            }
-        }
-    ])
+def get_random_advice(chance_of_advice: float=0.1) -> str:
+    """
+    Return a piece of advice to send to a user from list of possible advice.
 
-    res = list(res)[0]
-
-    return res
-
-
-def get_random_advice(chance_of_advice=0.1):
+    Keyword arguments:
+    chance_of_advice  -- chance of advice being triggered per message (default 0.1)
+    """
     advice_list = ["You can write me the name of a topic that you want to hear trivia about and I will do my best to find an interesting fact about it.",
                    "If you find a fact particularly interesting, please let me know via the button, so I can share it with other users.", 
                    "Please note that I am based on ChatGPT so I may make mistakes and misunderstand some things. You can always ask me to tell you more about a topic to check my sources.",
@@ -48,71 +39,11 @@ def get_random_advice(chance_of_advice=0.1):
     return None
 
 
-
-def get_random_trivia_from_db()  -> str | str | str | str:
-    trivia_from_db = get_random_doc_from_db()
-    article_name = trivia_from_db["article_name"]
-    full_text = wiki_wiki.page(article_name.strip()).summary
-    result = trivia_from_db["result"]
-    wiki_url = trivia_from_db["wiki_url"]
-    return article_name, full_text, result, wiki_url
-
-
-def get_random_trivia() -> str | str | str | str:
-    url = requests.get("https://en.wikipedia.org/wiki/Special:Random")
-    soup = BeautifulSoup(url.content, "html.parser")
-    article_name = soup.find(class_="firstHeading").text
-    wiki_page = wiki_wiki.page(article_name.strip())
-    wiki_url = wiki_page.fullurl
-    text_content = wiki_page.summary if len(wiki_page.text) > 2000 else wiki_page.text
-    text_content = text_content.split(sep="\n\nReferences")[0].replace("\n", " ").replace(r"\\", "").replace("== References ==", "")
-    result = None
-
-    if wiki_page.exists() and len(text_content) > 300:
-            wiki_query = f"Find an interesting piece of trivia in this text. Do not use the word trivia. Use only information in this text: {text_content}"
-            try:
-                result = llm(wiki_query)
-            except:
-                return get_random_trivia_from_db()
-
-            if fuzz.partial_ratio(text_content, result) < 70:
-                print("Fuzzy matching failed, fall back to trivia from db.")
-                return get_random_trivia_from_db()
-    else:
-        print("Getting new trivia")
-        return get_random_trivia_from_db()
-    return article_name, text_content, result.strip(), wiki_url
-    
-
-def get_specific_trivia(article_name: str) -> str | str | str | str:
-    wiki_page = None
-    try:
-        wiki_page = wiki_wiki.page(article_name.strip())
-        wiki_url = wiki_page.fullurl
-        text_content = wiki_page.summary if len(wiki_page.text) > 2000 else wiki_page.text
-        text_content = text_content.split(sep="\n\nReferences")[0].replace("\n", " ").replace(r"\\", "").replace("== References ==", "")
-    except: 
-        print("Could not find Wikipedia entry")
-
-    result = None
-
-    if wiki_page.exists() and len(text_content) > 300:
-            wiki_query = f"Find an interesting piece of trivia in this text. Do not use the word trivia. Use only information in this text: {text_content}"
-            try:
-                result = llm(wiki_query)
-            except:
-                print("Could not produce trivia from Wikipedia entry.")
-    if result:
-        return article_name, text_content, result.strip(), wiki_url
-    else:
-        return None, None, None, None
-
-
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await context.bot.send_message(chat_id=update.effective_chat.id, text="Hi, I am a bot that loves to share trivia! I get my information from Wikipedia. Nevertheless, since I am based on ChatGPT, I may sometimes misunderstand some things. You can always ask me to tell you more about the latest trivia fact and I will give you the original info from Wikipedia!")
     await context.bot.send_message(chat_id=update.effective_chat.id, text="Here's a random piece of trivia I found on Wikipedia for you:")
     await context.bot.send_chat_action(chat_id=update.effective_chat.id, action=constants.ChatAction.TYPING)
-    article_name, full_text, result, wiki_url = get_random_trivia()
+    article_name, full_text, result, wiki_url = get_random_trivia(wiki_connection, llm, db)
     last_result_dict[update.effective_chat.id] = [article_name, result, wiki_url]
     await context.bot.send_message(chat_id=update.effective_chat.id, text=f"{article_name}: {result}", reply_markup=ReplyKeyboardMarkup(buttons))
 
@@ -122,13 +53,13 @@ async def echo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     advice = get_random_advice(chance_of_advice=0.1)
     if update.message.text == "Tell me some more trivia!":
         await context.bot.send_chat_action(chat_id=update.effective_chat.id, action=constants.ChatAction.TYPING)
-        article_name, full_text, result, wiki_url = get_random_trivia()
+        article_name, full_text, result, wiki_url = get_random_trivia(wiki_connection, llm, db)
         await context.bot.send_message(chat_id=update.effective_chat.id, text=f"{article_name}: {result}", reply_markup=ReplyKeyboardMarkup(buttons))
         last_result_dict[update.effective_chat.id] = [article_name, result, wiki_url]
         await context.bot.send_message(chat_id=update.effective_chat.id, text=advice, reply_markup=ReplyKeyboardMarkup(buttons)) if advice else None
     elif update.message.text == "Tell me more about this!":
         if len(last_result_dict[update.effective_chat.id]) < 4:
-            article_text = wiki_wiki.page(last_result_dict[update.effective_chat.id][0].strip()).summary
+            article_text = wiki_connection.page(last_result_dict[update.effective_chat.id][0].strip()).summary
             max_len_of_message = 4000
             parts_of_article = [article_text[i:i+max_len_of_message] for i in range(0, len(article_text), max_len_of_message)]
             for part_of_article in parts_of_article:
@@ -146,7 +77,7 @@ async def echo(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     else:
         await context.bot.send_chat_action(chat_id=update.effective_chat.id, action=constants.ChatAction.TYPING)
-        article_name, full_text, result, wiki_url = get_specific_trivia(article_name=update.message.text)
+        article_name, full_text, result, wiki_url = get_specific_trivia(article_name=update.message.text, wiki_connection=wiki_connection, llm=llm)
         if article_name:
             last_result_dict[update.effective_chat.id] = [article_name, result, wiki_url]
             await context.bot.send_message(chat_id=update.effective_chat.id, text=f"{article_name}: {result}", reply_markup=ReplyKeyboardMarkup(buttons))
@@ -157,20 +88,28 @@ async def echo(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 if __name__ == '__main__':
-    load_dotenv()
     last_result_dict = {}
 
+    # Load private API info from environment variables
+    load_dotenv()
     api_key = os.environ.get("OPENAI_API_KEY")
     telegram_api_key = os.environ.get("TELEGRAM_API_KEY")
-    mongo_db_key = os.environ["MONGO_DB_KEY"]
+    mongo_db_key = os.environ.get("MONGO_DB_KEY")
+    mongo_db_cluster = os.environ.get("MONGO_DB_CLUSTER")
+    wikipedia_user_agent = os.environ.get("WIKIPEDIA_USER_AGENT")
 
-    client = MongoClient(f"mongodb+srv://admin:{mongo_db_key}@cluster0.3r2po1q.mongodb.net/?retryWrites=true&w=majority")
+    # Set up connection to MongoDB collection
+    client = MongoClient(f"mongodb+srv://admin:{mongo_db_key}@{mongo_db_cluster}.mongodb.net/?retryWrites=true&w=majority")
     db = client.chatbot
     collection = db.trivia
-    
-    llm = OpenAI(temperature=0.1)
-    wiki_wiki = wikipediaapi.Wikipedia('trivAI_user_agent', 'en')
 
+    # Initialize GPT 3.5 llm model
+    llm = OpenAI(temperature=0.1)
+
+    # Set up Wikipedia agent
+    wiki_connection = wikipediaapi.Wikipedia(wikipedia_user_agent, 'en')
+
+    # Set up Telegram API and build application
     application = ApplicationBuilder().token(telegram_api_key).build()
     
     start_handler = CommandHandler('start', start)
@@ -179,7 +118,9 @@ if __name__ == '__main__':
     application.add_handler(start_handler)
     application.add_handler(echo_handler)
 
+    # Initialize menu buttons
     buttons = [[KeyboardButton("Tell me some more trivia!")], [KeyboardButton("Tell me more about this!")], [KeyboardButton("I like this fact!")]]
 
+    # Run application
     application.run_polling()
 
