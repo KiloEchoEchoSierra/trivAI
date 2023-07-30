@@ -1,9 +1,17 @@
+import logging
 import requests
 from bs4 import BeautifulSoup
 from fuzzywuzzy import fuzz
 from langchain.llms.openai import OpenAI
 from wikipediaapi import Wikipedia, WikipediaPage
 from pymongo.database import Database
+
+
+logging.basicConfig(
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    level=logging.INFO
+)
+
 
 def get_random_doc_from_db(db):
     """
@@ -69,10 +77,10 @@ def get_random_trivia(wiki_connection: Wikipedia, llm: OpenAI, db: Database) -> 
                 return get_random_trivia_from_db(wiki_connection, db)
 
             if fuzz.partial_ratio(text_content, result) < 70:
-                print("Fuzzy matching failed, fall back to trivia from db.")
+                logging.info("Fuzzy matching failed, fall back to trivia from db.")
                 return get_random_trivia_from_db(wiki_connection, db)
     else:
-        print("Getting new trivia")
+        logging.info("Wikipedia article unsuitable for retrieving trivia. Loading different article.")
         return get_random_trivia_from_db(wiki_connection, db)
     return article_name, text_content, result.strip(), wiki_url
     
@@ -88,7 +96,7 @@ def get_specific_trivia(article_name: str, wiki_connection: Wikipedia, llm: Open
     try:
         wiki_page, wiki_url, text_content = get_wiki_details(wiki_connection, article_name)
     except: 
-        print("Could not find Wikipedia entry")
+        logging.info("Could not find Wikipedia entry")
 
     result = None
 
@@ -97,7 +105,7 @@ def get_specific_trivia(article_name: str, wiki_connection: Wikipedia, llm: Open
             try:
                 result = llm(wiki_query)
             except:
-                print("Could not produce trivia from Wikipedia entry.")
+                logging.info("Could not produce trivia from Wikipedia entry.")
     if result:
         return article_name, text_content, result.strip(), wiki_url
     else:

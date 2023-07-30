@@ -39,7 +39,15 @@ def get_random_advice(chance_of_advice: float=0.1) -> str:
     return None
 
 
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """
+    Handles first time interaction with user.
+
+    Keyword arguments:
+    update  -- represents an incoming update.
+    context -- convenience class to gather customizable types of the :class:`telegram.ext.CallbackContext`
+    interface.
+    """
     await context.bot.send_message(chat_id=update.effective_chat.id, text="Hi, I am a bot that loves to share trivia! I get my information from Wikipedia. Nevertheless, since I am based on ChatGPT, I may sometimes misunderstand some things. You can always ask me to tell you more about the latest trivia fact and I will give you the original info from Wikipedia!")
     await context.bot.send_message(chat_id=update.effective_chat.id, text="Here's a random piece of trivia I found on Wikipedia for you:")
     await context.bot.send_chat_action(chat_id=update.effective_chat.id, action=constants.ChatAction.TYPING)
@@ -48,8 +56,16 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await context.bot.send_message(chat_id=update.effective_chat.id, text=f"{article_name}: {result}", reply_markup=ReplyKeyboardMarkup(buttons))
 
 
-async def echo(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    print(context)
+async def echo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """
+    Handles response to user input.
+
+    Keyword arguments:
+    update  -- represents an incoming update.
+    context -- convenience class to gather customizable types of the :class:`telegram.ext.CallbackContext`
+    interface.
+    """
+    logging.info(context)
     advice = get_random_advice(chance_of_advice=0.1)
     if update.message.text == "Tell me some more trivia!":
         await context.bot.send_chat_action(chat_id=update.effective_chat.id, action=constants.ChatAction.TYPING)
@@ -69,7 +85,7 @@ async def echo(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await context.bot.send_message(chat_id=update.effective_chat.id, text=f"{last_result_dict[update.effective_chat.id][3]}", reply_markup=ReplyKeyboardMarkup(buttons))
     elif update.message.text ==  "I like this fact!":
         if not collection.find_one({'article_name': last_result_dict[update.effective_chat.id][0]}):
-            print(f"Saving {last_result_dict[update.effective_chat.id][0]} to database")
+            logging.info(f"Saving {last_result_dict[update.effective_chat.id][0]} to database")
             collection.insert_one({"article_name": last_result_dict[update.effective_chat.id][0], "result": last_result_dict[update.effective_chat.id][1], "wiki_url": last_result_dict[update.effective_chat.id][2]})
             await context.bot.send_message(chat_id=update.effective_chat.id, text=f"Thanks! I will share this fact about {last_result_dict[update.effective_chat.id][0]} with other users!", reply_markup=ReplyKeyboardMarkup(buttons))
         else:
@@ -88,6 +104,8 @@ async def echo(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 if __name__ == '__main__':
+    # initialize last_result_dict per user 
+    # ToDo: put latest result per user in database instead of memory
     last_result_dict = {}
 
     # Load private API info from environment variables
