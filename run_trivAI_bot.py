@@ -65,7 +65,6 @@ async def echo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     context -- convenience class to gather customizable types of the :class:`telegram.ext.CallbackContext`
     interface.
     """
-    logging.info(context)
     advice = get_random_advice(chance_of_advice=0.1)
     if update.message.text == "Tell me some more trivia!":
         await context.bot.send_chat_action(chat_id=update.effective_chat.id, action=constants.ChatAction.TYPING)

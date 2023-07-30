@@ -77,7 +77,7 @@ def get_random_trivia(wiki_connection: Wikipedia, llm: OpenAI, db: Database) -> 
                 return get_random_trivia_from_db(wiki_connection, db)
 
             if fuzz.partial_ratio(text_content, result) < 70:
-                logging.info("Fuzzy matching failed, fall back to trivia from db.")
+                logging.info("Fuzzy matching score insufficient, falling back to trivia from db.")
                 return get_random_trivia_from_db(wiki_connection, db)
     else:
         logging.info("Wikipedia article unsuitable for retrieving trivia. Loading different article.")
