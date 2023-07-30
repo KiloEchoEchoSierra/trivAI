@@ -13,7 +13,7 @@ logging.basicConfig(
 )
 
 
-def get_random_doc_from_db(db):
+def get_random_doc_from_db(db: Database) -> dict[str, any]:
     """
     Return a random document containing a trivia fact from MongoDB collection
 
@@ -33,7 +33,7 @@ def get_random_doc_from_db(db):
     return res
 
 
-def get_wiki_details(wiki_connection: Wikipedia, article_name: str) -> WikipediaPage | str | str:
+def get_wiki_details(wiki_connection: Wikipedia, article_name: str) -> tuple[WikipediaPage, str, str]:
     wiki_page = wiki_connection.page(article_name.strip())
     wiki_url = wiki_page.fullurl
     text_content = wiki_page.summary if len(wiki_page.text) > 2000 else wiki_page.text
@@ -41,7 +41,7 @@ def get_wiki_details(wiki_connection: Wikipedia, article_name: str) -> Wikipedia
     return wiki_page, wiki_url, text_content
 
 
-def get_random_trivia_from_db(wiki_connection: Wikipedia, db: Database)  -> str | str | str | str:
+def get_random_trivia_from_db(wiki_connection: Wikipedia, db: Database)  -> tuple[str, str, str, str]:
     """
     Return trivia that exists in MongoDB collection
 
@@ -56,7 +56,7 @@ def get_random_trivia_from_db(wiki_connection: Wikipedia, db: Database)  -> str 
     return article_name, full_text, result, wiki_url
 
 
-def get_random_trivia(wiki_connection: Wikipedia, llm: OpenAI, db: Database) -> str | str | str | str:
+def get_random_trivia(wiki_connection: Wikipedia, llm: OpenAI, db: Database) -> tuple[str, str, str, str]:
     """
     Extract trivia from a random Wikipedia article.
 
@@ -85,7 +85,7 @@ def get_random_trivia(wiki_connection: Wikipedia, llm: OpenAI, db: Database) -> 
     return article_name, text_content, result.strip(), wiki_url
     
 
-def get_specific_trivia(article_name: str, wiki_connection: Wikipedia, llm: OpenAI) -> str | str | str | str:
+def get_specific_trivia(article_name: str, wiki_connection: Wikipedia, llm: OpenAI) -> tuple[str, str, str, str] | tuple[None, None, None, None]:
     """
     Extract trivia from a named Wikipedia article.
 
