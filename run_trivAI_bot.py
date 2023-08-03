@@ -2,13 +2,14 @@ import logging
 import os
 import random
 import wikipediaapi
+import spacy
 from telegram import Update, KeyboardButton, ReplyKeyboardMarkup, constants
 from telegram.ext import filters, MessageHandler, ApplicationBuilder, CommandHandler, ContextTypes
 from langchain.llms import OpenAI
 from pymongo import MongoClient
 from dotenv import load_dotenv
 
-from get_trivia import get_random_trivia, get_specific_trivia
+from get_trivia import get_trivia
 
 
 logging.basicConfig(
@@ -51,7 +52,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await context.bot.send_message(chat_id=update.effective_chat.id, text="Hi, I am a bot that loves to share trivia! I get my information from Wikipedia. Nevertheless, since I am based on ChatGPT, I may sometimes misunderstand some things. You can always ask me to tell you more about the latest trivia fact and I will give you the original info from Wikipedia!")
     await context.bot.send_message(chat_id=update.effective_chat.id, text="Here's a random piece of trivia I found on Wikipedia for you:")
     await context.bot.send_chat_action(chat_id=update.effective_chat.id, action=constants.ChatAction.TYPING)
-    article_name, full_text, result, wiki_url = get_random_trivia(wiki_connection, llm, db)
+    article_name, result, wiki_url = get_trivia(wiki_connection, wikipedia_user_agent, nlp, llm, db)
     last_result_dict[update.effective_chat.id] = [article_name, result, wiki_url]
     await context.bot.send_message(chat_id=update.effective_chat.id, text=f"{article_name}: {result}", reply_markup=ReplyKeyboardMarkup(buttons))
 
@@ -68,7 +69,7 @@ async def echo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     advice = get_random_advice(chance_of_advice=0.1)
     if update.message.text == "Tell me some more trivia!":
         await context.bot.send_chat_action(chat_id=update.effective_chat.id, action=constants.ChatAction.TYPING)
-        article_name, full_text, result, wiki_url = get_random_trivia(wiki_connection, llm, db)
+        article_name, result, wiki_url = get_trivia(wiki_connection, wikipedia_user_agent, nlp, llm, db)
         await context.bot.send_message(chat_id=update.effective_chat.id, text=f"{article_name}: {result}", reply_markup=ReplyKeyboardMarkup(buttons))
         last_result_dict[update.effective_chat.id] = [article_name, result, wiki_url]
         await context.bot.send_message(chat_id=update.effective_chat.id, text=advice, reply_markup=ReplyKeyboardMarkup(buttons)) if advice else None
@@ -92,7 +93,7 @@ async def echo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
     else:
         await context.bot.send_chat_action(chat_id=update.effective_chat.id, action=constants.ChatAction.TYPING)
-        article_name, full_text, result, wiki_url = get_specific_trivia(article_name=update.message.text, wiki_connection=wiki_connection, llm=llm)
+        article_name, result, wiki_url = get_trivia(wiki_connection, wikipedia_user_agent, nlp, llm, db, article_name=update.message.text)
         if article_name:
             last_result_dict[update.effective_chat.id] = [article_name, result, wiki_url]
             await context.bot.send_message(chat_id=update.effective_chat.id, text=f"{article_name}: {result}", reply_markup=ReplyKeyboardMarkup(buttons))
@@ -114,6 +115,8 @@ if __name__ == '__main__':
     mongo_db_key = os.environ.get("MONGO_DB_KEY")
     mongo_db_cluster = os.environ.get("MONGO_DB_CLUSTER")
     wikipedia_user_agent = os.environ.get("WIKIPEDIA_USER_AGENT")
+
+    nlp = spacy.load("en_core_web_sm")
 
     # Set up connection to MongoDB collection
     client = MongoClient(f"mongodb+srv://admin:{mongo_db_key}@{mongo_db_cluster}.mongodb.net/?retryWrites=true&w=majority")

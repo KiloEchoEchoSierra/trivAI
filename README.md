@@ -27,6 +27,11 @@ Install the required packages from requirements.txt in your virtual environment:
 pip install -r requirements.txt
 ```
 
+Install the required spacy language package:
+```bash
+python -m spacy download en_core_web_sm
+```
+
 Create a `.env` file in the main folder.
 
 Add the environment variables to the `.env` file:
